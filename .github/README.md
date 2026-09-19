@@ -32,6 +32,10 @@ git diff --stat upstream/main..HEAD       # → 见下表
 | 9 | **`site/patches/`：autotune 选型钉住补丁** | **引擎行为** | 上游 SGLang 在 EP 分片下每 boot 删掉 autotune 缓存 ⇒ fused-MoE 选型重新抽签（见 §六） |
 | 10 | `site/tools/perf-gate.sh` + 挂进 monitor | 运维 | 每次新 boot 自动跑一次性能门禁（口径 D 8K/100K + PR-v3 131072×C1） |
 | 11 | `site/tools/` 新增分析/修补脚本 | **新增代码** | `pr-v3-conical.sh` / `merge_pr_v3_batches.py` / `make_flashinfer_autotune_patch.py` / `make_entropy_variant.py` 等 |
+| 12 | **`--prefill-decode-interval 8`**（PDI） | **引擎行为** | 冷长 prefill 期间在途解码流被冻到基线的 **5%**；加此旋钮回到 **41%**，而**独跑冷加载零成本**（见 §七） |
+| 13 | `site/tools/` 再增：`pdi-storm-probe.py` / `fingerprint.py` / `prose_bench_sparkdash.py` | **新增代码** | 冻结比探针（口径 H）· 贪心指纹（改输出的改动一律先过它）· sparkDash 口径的散文尺 |
+| 14 | `site/tools/patch_gsm8k_thinking.py` | **口径修正** | GSM8K harness 显式钉死 `thinking=false`，消除对引擎默认值的隐式依赖（与上游 PR #1 同款修复） |
+| 15 | `site/tools/patch_hc_combine_96.py` / `patch_start_sh_hc96.py` | **证据留档** | 上游 `#40208`（融合 `hc_combine_norm` 扩到 9–96 行）的移植件与挂载器 —— 实测**改输出**（指纹 `13a18f7a…`→`ab56c6d6…`），按纪律**否决并撤回**，脚本保留可复核 |
 
 ---
 
@@ -144,6 +148,28 @@ docker exec -e TYPES=structured,prose,code,json -e CONCURRENCIES=1,2,4,8,16 \
 ⚠️ **前提**：各 rank 自己那份缓存必须**完整**。若出现「部分 rank 命中、部分去调优」，调优会落在 TP 计时归约这个集合操作上 ⇒ **栈起不来** —— 这一点我们踩过。
 
 已上报上游：**[sgl-project/sglang#40320](https://github.com/sgl-project/sglang/issues/40320)**。
+
+---
+
+## 七、为什么本站开 `--prefill-decode-interval 8`
+
+本栈 `enable_mixed_chunk=False`（上游默认，且与 `--enable-encoder-swa-bounded-replay` 硬性互斥）⇒ chunked prefill 的每个 step 都是 **prefill-only**，**正在解码的请求不参与 forward**。一条 100K 冷文档 = 约 25 个连续独占 step。
+
+实测（口径 H：3 条 100K **命中**解码流 + 注入 1 条 100K **冷**请求；冻结比 = 窗内解码速率 ÷ 基线速率）：
+
+| | 冻结比 | 风暴窗 | 窗内三流增量 |
+|---|---:|---:|---|
+| PDI=0 | **0.051** | 33.8 s | 16 / 16 / 15 |
+| **PDI=8（本站采用）** | **0.414** | 57.0 s | 211 / 191 / 192 |
+| PDI=16 | 0.590 | 80.9 s | 429 / 426 / 428 |
+
+0.051 的含义是：**在途解码流被冻到基线的 5%**（33.8 s 里每流只吐 16 个 token）—— 那是"回答卡住、像挂了"的体验。
+
+**为什么取 8**：收益 `N/(N+K)`（实测 **K≈11.3**，在 N=8 上冻结比与窗长同时验中）是**凹函数**、代价线性 ⇒ 8 已把"像挂了"变成"明显慢但在走"，再往上加边际收益小、冷加载代价翻倍。关键判据：**独跑冷加载零成本** —— 100K 冷 prefill 33.0 s（PDI=8）vs 32.6 s（PDI=0），多出来的时间**只等于解码流实际干的活** ⇒ 它只在有并发受害者时付费。
+
+⚠️ **一条被自己推翻的结论（留档）**：我们曾测得「PDI=8 让 c16 并发快 22~30%」。按"≥3 轮"复跑后**作废** —— 那是**偶发启动段尖峰**（落在随机某一档，该档聚合 ×0.75，机制未识别）的落点差异造成的**选择性偏差**；剔掉尖峰样本后两配置同带。⇒ **单轮并发阶梯不能归因**，且跨配置比较必须先确认尖峰没落在被比的那一档。
+
+**回滚**：删掉生产 `.env.tp4` 的 `EXTRA_SGLANG_ARGS` 里那一项并重建容器（≤10 min）。
 
 ---
 
