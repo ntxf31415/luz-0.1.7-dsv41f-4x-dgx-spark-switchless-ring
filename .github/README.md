@@ -8,7 +8,7 @@
 - **基底**：上游 commit `70a1d02`，根目录原样保留
 - **本站改动**：全部隔离在 `site/`，与上游的差异可用一条命令复现 ⬇️
 - **部署形态**：**上游 Form A 原样**（`600K ctx / 9.6M KV 池 / 16 路 / mem_fraction_static 0.90`）
-- **唯一引擎行为偏离**：摘除 `DSV41_MOE_B12X` 族（理由见下）
+- **两处引擎行为偏离**：① 摘除 `DSV41_MOE_B12X` 族（见 §二）② 站点补丁钉住 autotune 选型（见 §六）
 
 ---
 
@@ -27,8 +27,11 @@ git diff --stat upstream/main..HEAD       # → 见下表
 | 4 | served-name 双别名 | 兼容 | 下游门户在用旧名 `deepseek-v4-flash-vision-exp`，去掉即断链 |
 | 5 | 四机本地权重 + `WORKER_ENGRAM_DIR` 显式指向 | 环境 | 站点四机全本地；复用现成 48 GB engram 分片，免重打 |
 | 6 | `site/tools/` 基准工具集 | **新增代码** | 上游没有：`armsuite.sh` / `night-matrix.sh` / `pr-matrix.sh` / `ab-arm.sh` 等 |
-| 7 | `site/results/` 原始产物 | **新增数据** | SD-1 DE 矩阵 4 类型 × 5 并发 × 3 波 |
+| 7 | `site/results/` 原始产物 | **新增数据** | SD-1 DE 矩阵 4 类型 × 5 并发 × 3 波；PR-v3 24 格；b12x A/B；16K/64K 补测 |
 | 8 | `site/config/.env.tp4.example` | 新增配置 | 站点生产配置（已脱敏） |
+| 9 | **`site/patches/`：autotune 选型钉住补丁** | **引擎行为** | 上游 SGLang 在 EP 分片下每 boot 删掉 autotune 缓存 ⇒ fused-MoE 选型重新抽签（见 §六） |
+| 10 | `site/tools/perf-gate.sh` + 挂进 monitor | 运维 | 每次新 boot 自动跑一次性能门禁（口径 D 8K/100K + PR-v3 131072×C1） |
+| 11 | `site/tools/` 新增分析/修补脚本 | **新增代码** | `pr-v3-conical.sh` / `merge_pr_v3_batches.py` / `make_flashinfer_autotune_patch.py` / `make_entropy_variant.py` 等 |
 
 ---
 
@@ -127,6 +130,20 @@ docker exec -e TYPES=structured,prose,code,json -e CONCURRENCIES=1,2,4,8,16 \
   -e OUT_DIR=/state/bench-results/de -w /state/sdbench \
   dsv41-head python3 /state/sdbench/de_matrix_v3.py
 ```
+
+## 六、站点补丁：钉住 FlashInfer autotune 选型（上游 EP 分片 bug）
+
+**症状**：同配置跨 boot 的长 prefill 吞吐可差 **1.5 倍**（8K 口径 D 3169 vs 2431 t/s），且抽到慢签的那次会**持续整个进程**。
+
+**根因 —— 在上游 SGLang，非本 fork 特有**：`sglang/srt/model_executor/runner/flashinfer_autotune.py` 的 `_drop_diverged_autotune_cache()` 要求四个 rank **各自** autotune 缓存文件的摘要一致，不一致就把缓存 `unlink` 掉、全部重调。而 **TP4 / EP2** 下每个 rank 拥有不同的专家分片 ⇒ **各自的 MoE GEMM 形状集天然不相交**（实测四份交集为 **0**：rank0 含 `(192,2304,320)`、rank1 含 `(64,2304,320)`…）⇒ 该条件**永不满足** ⇒ 缓存每 boot 被删 ⇒ 全量重调 ⇒ 计时选优的 fused-MoE tactic **每次重新抽签**。
+
+**修法**：`site/patches/` 的站点补丁只改一处 —— 把 `cache_path.unlink(missing_ok=True)` 换成日志 + 保留（判定与 all_gather 保留以便观测）。生成器 `site/tools/make_flashinfer_autotune_patch.py` 从镜像内取原文件、打补丁、`py_compile` 自检（带锚点断言，上游文件一变即拒绝生成）；`site/tools/patch_start_sh_sitepatch.py` 在生产编排里做单文件挂载。
+
+**验证**：修复后每次启动的**调优次数为 0**（= 缓存被真正读取并采用，而非仅被写入），性能稳定同档；贪心指纹全程不变；`gate --full` 8/8、GSM8K 无回归。
+
+⚠️ **前提**：各 rank 自己那份缓存必须**完整**。若出现「部分 rank 命中、部分去调优」，调优会落在 TP 计时归约这个集合操作上 ⇒ **栈起不来** —— 这一点我们踩过。
+
+已上报上游：**[sgl-project/sglang#40320](https://github.com/sgl-project/sglang/issues/40320)**。
 
 ---
 
