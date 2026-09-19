@@ -22,8 +22,10 @@ CACHE=/home/spark/.cache/sglang/flashinfer/autotune
 VER=0.6.18
 ARCH=sm121
 KEYS="3791e5b7aa102b24 85711ef344e18516 a4bba847bf039e87 f72f37b0801895b7"
-# rank 0..3 对应的主机（与 .env.tp4 的 WORKER_IPS 顺序一致）
-NODES=(192.168.50.55 192.168.50.56 192.168.50.58 192.168.50.57)
+# rank 0..3 对应的主机 —— 从环境取，与 .env.tp4 同一套变量（HEAD_IP + WORKER_IPS，空格分隔）
+: "${HEAD_IP:?请先 export HEAD_IP（见 .env.tp4）}"
+: "${WORKER_IPS:?请先 export WORKER_IPS（见 .env.tp4）}"
+NODES=("$HEAD_IP" $WORKER_IPS)
 STAGE=/tmp/autotune-canon
 
 echo "=== ① 采集 head(rank0) 的规范内容 ==="
@@ -42,7 +44,7 @@ idx=0
 for ip in "${NODES[@]}"; do
   rank=$idx
   printf "  rank%d @ %-16s " "$rank" "$ip"
-  if [ "$ip" = "192.168.50.55" ]; then
+  if [ "$ip" = "$HEAD_IP" ]; then
     # 本机：直接从 STAGE 装
     docker run --rm -v "$CACHE:/hc" -v "$STAGE:/stage:ro" --entrypoint sh "$IMG" -c "
       n=0; for f in /stage/*.json; do k=\$(basename \$f .json)
@@ -64,7 +66,7 @@ for k in $KEYS; do
   idx=0
   for ip in "${NODES[@]}"; do
     printf "      rank%d @ %-16s " "$idx" "$ip"
-    if [ "$ip" = "192.168.50.55" ]; then
+    if [ "$ip" = "$HEAD_IP" ]; then
       docker run --rm -v "$CACHE:/hc:ro" --entrypoint sh "$IMG" -c "sha256sum /hc/$VER/$ARCH/$k/rank_tp${idx}_pp0_dp0.json 2>/dev/null | cut -c1-32" 2>/dev/null || echo "(缺)"
     else
       ssh -o BatchMode=yes -o ConnectTimeout=8 "spark@$ip" "docker run --rm -v $CACHE:/hc:ro --entrypoint sh $IMG -c \"sha256sum /hc/$VER/$ARCH/$k/rank_tp${idx}_pp0_dp0.json 2>/dev/null | cut -c1-32\"" 2>&1 | tail -1
