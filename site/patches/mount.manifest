@@ -1,0 +1,8 @@
+# --- production site patch (pre-existing) ---
+flashinfer_autotune.py|/sgl-workspace/sglang/python/sglang/srt/model_executor/runner/flashinfer_autotune.py
+# --- P0.46: adopted upstream fixes ---
+# LuZ PR #2: mask multimodal input sentinel tokens at both sampling sites
+mount/deepseek_v4.py|/sgl-workspace/sglang/python/sglang/srt/models/deepseek_v4.py
+mount/dspark_draft.py|/sgl-workspace/sglang/python/sglang/srt/speculative/dspark_components/dspark_draft.py
+# sglang #40111: drop host sync in DSpark prefill slot expansion
+mount/dspark_worker_v2.py|/sgl-workspace/sglang/python/sglang/srt/speculative/dspark_components/dspark_worker_v2.py
