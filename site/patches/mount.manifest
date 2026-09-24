@@ -1,8 +1,8 @@
-# --- production site patch (pre-existing) ---
+# --- production site patch ---
 flashinfer_autotune.py|/sgl-workspace/sglang/python/sglang/srt/model_executor/runner/flashinfer_autotune.py
-# --- P0.46 adopted upstream fixes ---
-mount/deepseek_v4.py|/sgl-workspace/sglang/python/sglang/srt/models/deepseek_v4.py
-mount/dspark_draft.py|/sgl-workspace/sglang/python/sglang/srt/speculative/dspark_components/dspark_draft.py
+# --- P0.46 adopted upstream fix: sglang #40111（DSpark prefill slot expansion 去掉一次 host 同步）---
 mount/dspark_worker_v2.py|/sgl-workspace/sglang/python/sglang/srt/speculative/dspark_components/dspark_worker_v2.py
-# --- P0.47 adopted: sglang #40758 escape literal image placeholder in user text ---
+# --- P0.47 adopted: sglang #40758（用户文本里的字面图像占位符转义，而非 HTTP 400）---
 mount/encoding_dsv41.py|/sgl-workspace/sglang/python/sglang/srt/entrypoints/openai/encoding_dsv41.py
+# 注：LuZ PR #2（mm 哨兵屏蔽）自 0.2.8 起由镜像内 mm_ban 原生覆盖（438 id · target+draft 两侧 ·
+#     加载期 fail-closed 自检 · gate 断言）⇒ 本清单不再挂 mount/deepseek_v4.py 与 mount/dspark_draft.py。
