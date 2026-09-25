@@ -7,8 +7,10 @@
 
 - **基底**：上游 commit `70a1d02`，根目录原样保留
 - **本站改动**：全部隔离在 `site/`，与上游的差异可用一条命令复现 ⬇️
-- **部署形态**：**上游 Form A 原样**（`600K ctx / 9.6M KV 池 / 16 路 / mem_fraction_static 0.90`）
-- **两处引擎行为偏离**：① 摘除 `DSV41_MOE_B12X` 族（见 §二）② 站点补丁钉住 autotune 选型（见 §六）
+- **部署形态**：**上游 Form A 原样**（`600K ctx / 9.6M KV 池 / 16 路 / mem_fraction_static 0.90`，**chunk 8192**）
+- **三处引擎行为偏离**：① 摘除 `DSV41_MOE_B12X` 族（见 §二）② 站点补丁钉住 autotune 选型（见 §六）③ **`encoding_dsv41.py` reasoning 预算修正**（low 25→50 / high 50→75，对应上游 #39929；生成器 `site/tools/patch_encoding_reasoning_budget.py`）
+- **与上游 0.2.8 定板的逐键对账（2026-09-25）**：差异收敛到 **2 处有意偏离**（`--prefill-decode-interval 8`、`MoE B12X 摘除`）+ 1 处未评估（`DSV41_DENSE_INDEXER_LOGITS_BUDGET_BYTES` 512 MiB vs 定板 128 MiB）；另有 4 处已对齐（`SGLANG_ENABLE_HEALTH_ENDPOINT_GENERATION=0`、`--max-queued-requests 32`、`DSV41_SKIP_NONFINAL_DECODER=1`、`DSV41_PREFILL_SHARE_TOKENS=0`）。
+  ⚠️ **改 `EXTRA_DOCKER_ENV` 请用 `site/tools/set_extra_env.py`**：该行是两个键之间漏一个空格就会**静默失效**的（docker 照收、引擎只打一行 warn）—— 本站刚因此让 `SKIP_NONFINAL_DECODER` 假 false、`PREFILL_SHARE_TOKENS` 完全没进容器整整一个 boot。
 
 ---
 
