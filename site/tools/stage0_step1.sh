@@ -21,7 +21,7 @@ CONTAINER="${2:-dsv41-head}"
 ROOT="$HOME/luz028"
 RULER="$ROOT/site/tools/prose_bench_sparkdash.py"
 KEY="$(cat "$ROOT/state-tp4/api-key" 2>/dev/null || echo Dgxdual)"
-export MODEL="${MODEL:-deepseek-v4.1-flash}" API_KEY="$KEY" URL="${URL:-http://127.0.0.1:8899}"
+export MODEL="${MODEL:-deepseek-v4.1-flash}" API_KEY="$KEY" URL="${URL:-http://127.0.0.1:8899/v1}"
 export MAX_TOKENS="${MAX_TOKENS:-256}"     # 与 knapcio README 同档（其值在此档测得）
 export ROUNDS="$ROUNDS"
 
