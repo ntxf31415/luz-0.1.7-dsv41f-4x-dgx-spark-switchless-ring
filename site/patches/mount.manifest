@@ -11,3 +11,10 @@ sp/verify_cap.py|/sp-adapters/verify_cap.py
 sp/router_live.py|/sp-adapters/router_live.py
 sp/sp_loader.py|/sp-adapters/sp_loader.py
 sp/zz_sp_loader.pth|/opt/sglang/lib/python3.12/site-packages/zz_sp_loader.pth
+
+# --- B4 评估件：b12x_next 路由 MoE（knapcio；DSV41_MOE_B12X_NEXT 未开时完全不生效）---
+b12x/b12x_bootstrap.py|/b12x-adapters/b12x_bootstrap.py
+b12x/b12x_loader.py|/b12x-adapters/b12x_loader.py
+b12x/moe_b12x_next.py|/b12x-adapters/moe_b12x_next.py
+b12x/b12x_next|/b12x-adapters/b12x_next
+b12x/zz_b12x_loader.pth|/opt/sglang/lib/python3.12/site-packages/zz_b12x_loader.pth

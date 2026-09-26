@@ -54,8 +54,8 @@ def read_manifest():
         src, dst = ln.split("|")
         src, dst = src.strip(), dst.strip()
         p = os.path.join(SP, src)
-        assert os.path.isfile(p), "manifest src missing: %s" % p
-        _ok_dst = ("/sgl-workspace/sglang/", "/opt/sglang/", "/sp-adapters/")
+        assert os.path.exists(p), "manifest src missing: %s" % p
+        _ok_dst = ("/sgl-workspace/sglang/", "/opt/sglang/", "/sp-adapters/", "/b12x-adapters/")
         assert dst.startswith(_ok_dst), "unexpected dst: %s" % dst
         out.append((src, dst))
     assert out, "manifest is empty"
